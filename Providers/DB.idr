@@ -508,25 +508,25 @@ namespace Automation
 
 namespace Query
 
-  data TableExpr : Database -> Schema -> Type where
-    T : (db : Database) -> (tbl : String) -> {default tactics {applyTactic findHasTable 50; solve; } ok : HasTable db tbl s} -> TableExpr db s
-    Union : TableExpr db s -> TableExpr db s -> TableExpr db s
-    Product : TableExpr db s1 -> TableExpr db s2 ->
+  data Query : Database -> Schema -> Type where
+    T : (db : Database) -> (tbl : String) -> {default tactics {applyTactic findHasTable 50; solve; } ok : HasTable db tbl s} -> Query db s
+    Union : Query db s -> Query db s -> Query db s
+    Product : Query db s1 -> Query db s2 ->
               {default () ok : isYes (decDisjoint s1 s2)} ->
-              TableExpr db (product s1 s2)
-    Project : TableExpr db s -> (s' : Schema) ->
+              Query db (product s1 s2)
+    Project : Query db s -> (s' : Schema) ->
               {default tactics { compute; applyTactic findSubSchema; solve; }
                ok : SubSchema s' s } ->
-              TableExpr db s'
-    Select : TableExpr db s -> Expr s BOOLEAN -> TableExpr db s
-    Rename : TableExpr db s -> (from, to : String) ->
+              Query db s'
+    Select : Query db s -> Expr s BOOLEAN -> Query db s
+    Rename : Query db s -> (from, to : String) ->
              {default tactics { compute; applyTactic findOccurs; solve; }
               fromOK : Occurs s from} ->
              {default tactics { compute; applyTactic findNotOccurs; solve; }
               toOK : Occurs s to -> _|_} ->
-             TableExpr db (Schemas.rename s from to fromOK toOK)
+             Query db (Schemas.rename s from to fromOK toOK)
 
-  getSchema : TableExpr db s -> Schema
+  getSchema : Query db s -> Schema
   getSchema {s=s} _ = s
 
   compileRename : (s : Schema) -> (from, to : String) -> String
@@ -539,9 +539,9 @@ namespace Query
           then ("\"" ++ from ++ "\" AS \"" ++ to ++ "\"") :: colNames s
           else col :: (compileRename' s)
 
-  compile : TableExpr db s -> String
+  compile : Query db s -> String
   compile te = "SELECT * FROM (" ++ compile' te ++ ")"
-    where compile' : TableExpr db s -> String
+    where compile' : Query db s -> String
           compile' (T db tbl) = tbl
           compile' (Union t1 t2) = "(" ++ compile' t1 ++ ") UNION (" ++ compile' t2 ++ ")"
           compile' (Product t1 t2) = "(" ++ compile' t1 ++ ") , (" ++ compile' t2 ++ ")"
@@ -556,7 +556,7 @@ namespace Query
                                         " FROM (" ++ compile' t ++ ")"
 
 
-  partial  query : TableExpr db s -> Table s
+  partial  query : Query db s -> Table s
 --  query (T t) = t
   query (Union t1 t2) = (query t1) ++ (query t2)
   query (Product t1 t2) = (query t1) * (query t2)

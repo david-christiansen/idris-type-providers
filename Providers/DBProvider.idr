@@ -61,7 +61,7 @@ namespace TypeProvider
                                    next <- getResults stmt s
                                    return (the (Table s) (r::next))
 
-  doQuery : String -> TableExpr db s -> IO (Table s)
+  doQuery : String -> Query db s -> IO (Table s)
   doQuery file q = do let q' = compile q ++ ";"
                       db <- mkForeign (FFun "sqlite3_open_file" [FString] FPtr) file
                       stmt <- mkForeign (FFun "prepare_query" [FPtr, FString] FPtr) db q'
