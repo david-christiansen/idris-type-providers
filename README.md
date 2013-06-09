@@ -22,3 +22,5 @@ To use:
 First, you must build the wrapper library for SQLite.  Run "make".
 
 Then, load Main.idr in Idris. This contains a statically-checked query.
+
+

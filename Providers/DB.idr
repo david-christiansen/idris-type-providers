@@ -345,7 +345,10 @@ namespace Data
 namespace Expr
 
   data Expr : Schema -> SQLType -> Type where
-    Col : (c : String) -> (t : SQLType) -> {default tactics { compute; applyTactic findHasType; solve;} what : HasType s c t} -> Expr s t
+    Col : (c : String) -> (t : SQLType) ->
+          {default tactics { compute; applyTactic findHasType; solve;}
+           what : HasType s c t} ->
+          Expr s t
     (+) : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
     (-) : Expr s INTEGER -> Expr s INTEGER -> Expr s INTEGER
     (==) : Expr s t1 -> Expr s t2 -> Expr s BOOLEAN
@@ -509,10 +512,14 @@ namespace Automation
 namespace Query
 
   data Query : Database -> Schema -> Type where
-    T : (db : Database) -> (tbl : String) -> {default tactics {applyTactic findHasTable 50; solve; } ok : HasTable db tbl s} -> Query db s
+    T : (db : Database) -> (tbl : String) ->
+        {default tactics {applyTactic findHasTable 50; solve; }
+         ok : HasTable db tbl s} ->
+        Query db s
     Union : Query db s -> Query db s -> Query db s
     Product : Query db s1 -> Query db s2 ->
-              {default () ok : isYes (decDisjoint s1 s2)} ->
+              {default ()
+               ok : isYes (decDisjoint s1 s2)} ->
               Query db (product s1 s2)
     Project : Query db s -> (s' : Schema) ->
               {default tactics { compute; applyTactic findSubSchema; solve; }

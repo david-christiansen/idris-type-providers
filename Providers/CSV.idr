@@ -95,13 +95,14 @@ csvType delim filename =
 -- Read the well-formed rows from a CSV file according to some schema
 partial
 readCSVFile : (t : CSVType) -> String -> IO (Maybe (List (Row t)))
-readCSVFile t file = do lines <- readLines file
-                        case lines of
-                          [] => return Nothing
-                          (h::body) =>
-                            if inferCSVType (delim t) h == t
-                              then return (Just (mapMaybe (readRow t) (drop 1 lines)))
-                              else return Nothing
+readCSVFile t file =
+  do lines <- readLines file
+     case lines of
+       [] => return Nothing
+       (h::body) =>
+         if inferCSVType (delim t) h == t
+           then return (Just (mapMaybe (readRow t) (drop 1 lines)))
+           else return Nothing
 
 test : NamedVect Int 3 ["a", "b", "c"]
 test = applyNames _ [1,2,3]
