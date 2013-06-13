@@ -34,10 +34,10 @@ decElem (s :: ss) s' with (choose (s == s'), decElem ss s')
     No $ \h => elemCase h (\h' => soNot h' notHere) notThere
 
 -- | Extract a named element through straightforward recursion on a proof of membership
-lookup' : NamedVect a n ss -> (s : String) -> Elem ss s -> a
-lookup' (x::xs) s (Here _) = x
-lookup' (x::xs) s (There rest) = lookup' xs s rest
-lookup' [] s prf = elemEmpty prf
+lookup' : (s : String) -> NamedVect a n ss -> Elem ss s -> a
+lookup' s (x::xs) (Here _)     = x
+lookup' s (x::xs) (There rest) = lookup' s xs rest
+lookup' s []      prf          = elemEmpty prf
 
 -- | Find a proof of membership, then extract the element
 lookup : (s : String) ->
@@ -45,7 +45,7 @@ lookup : (s : String) ->
          {prf : Elem ss s } ->
          {auto x : decElem ss s = Yes prf} ->
          a
-lookup s nv {prf=p} = lookup' nv s p
+lookup s nv {prf=p} = lookup' s nv p
 
 index : Fin n -> NamedVect a n ss -> a
 index fO     (x :: xs) = x
