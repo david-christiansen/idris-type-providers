@@ -11,7 +11,7 @@ data NamedVect : Type -> (n : Nat) -> (Vect String n) -> Type where
   Nil : NamedVect a O []
   (::) : a -> NamedVect a n ss -> NamedVect a (S n) (s :: ss)
 
-using (n : Nat)
+using (n : Nat, ss : Vect String n)
   data Elem : Vect String n -> String -> Type where
     Here : so (s == s') -> Elem {n=S n} (s :: ss) s'
     There : Elem {n=n} ss s' -> Elem {n=S n} (s::ss) s'
