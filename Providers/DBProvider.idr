@@ -4,12 +4,14 @@ import Providers.DB
 
 import Providers.DBParser
 
+%lib C "sqlite3"
+%link C "sqlite_provider.o"
+%include C "sqlite_provider.h"
+%dynamic "libsqlite3"
+%dynamic "./sqlite_provider.so"
+
+
 namespace TypeProvider
-  %lib "sqlite3"
-  %link "sqlite_provider.o"
-  %include "sqlite_provider.h"
-  %dynamic "libsqlite3"
-  %dynamic "./sqlite_provider.so"
 
   getTable : Ptr -> IO (Maybe (String, String))
   getTable ptr = do res <- mkForeign (FFun "sqlite3_step" [FPtr] FInt) ptr
