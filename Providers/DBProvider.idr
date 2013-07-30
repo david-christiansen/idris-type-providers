@@ -44,7 +44,7 @@ namespace TypeProvider
   getResultVal stmt i (NULLABLE t) = do tp <- mkForeign (FFun "sqlite3_column_type" [FPtr, FInt] FInt) stmt i
                                         if tp == SQLITE_NULL
                                           then return Nothing
-                                          else fmap Just (getResultVal stmt i t)
+                                          else map Just (getResultVal stmt i t)
   getResultVal stmt i REAL = mkForeign (FFun "sqlite3_column_double" [FPtr, FInt] FFloat) stmt i
   getResultVal stmt i BOOLEAN = do val <- mkForeign (FFun "sqlite3_column_int" [FPtr, FInt] FFloat) stmt i
                                    return (val /= 0)

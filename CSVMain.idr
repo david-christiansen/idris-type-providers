@@ -16,7 +16,7 @@ main = do f <- readCSVFile t "test.csv"
             Nothing => putStrLn "Couldn't open CSV file"
             Just rows =>
               do let ages = map getAge rows
-                 let names = map (NamedVect.index fO) rows
+                 let names = map (NamedVect.index fZ) rows
                  putStrLn (show ages)
                  putStrLn (show names)
 

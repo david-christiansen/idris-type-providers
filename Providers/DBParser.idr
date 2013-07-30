@@ -90,7 +90,7 @@ toSchema ((colName, colT, nullable)::cols) = do tp <- getType colT nullable
                                                 rest <- toSchema cols
                                                 return (colName:::tp :: rest)
     where getType : String -> Bool -> Maybe SQLType
-          getType t         True  = fmap NULLABLE (getType t False)
+          getType t         True  = map NULLABLE (getType t False)
           getType "VARCHAR" False = Just TEXT
           getType "TEXT"    False = Just TEXT
           getType "INTEGER" False = Just INTEGER

@@ -31,7 +31,9 @@ isNo (No _)  = ()
 soNot : so p -> so (not p) -> _|_
 soNot oh oh impossible
 
-
+instance Cast Nat Int where
+  cast O = 0
+  cast (S n) = 1 + (cast n)
 
 namespace Types
   data SQLType = INTEGER | TEXT | NULLABLE SQLType | REAL | BOOLEAN
@@ -367,6 +369,7 @@ namespace Expr
   expr (Length e) r = cast {to=Int} (length (expr e r))
   expr (Const t c) r = c
 
+  %assert_total
   compileExpr : Expr s t -> String
   compileExpr (Col c t) = "\"" ++ c ++ "\""
   compileExpr (e1 + e2) = "(" ++ compileExpr e1 ++ ") + (" ++ compileExpr e2 ++ ")"

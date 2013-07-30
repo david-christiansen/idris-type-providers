@@ -11,24 +11,24 @@ import Providers
 -- | Get the lines of a file as a list of strings
 partial
 readLines : String -> IO (List String)
-readLines fname = fmap (Strings.split (\c => List.elem c ['\n', '\r'])) (readFile fname)
+readLines fname = map (Strings.split (\c => List.elem c ['\n', '\r'])) (readFile fname)
 
 -- | Split into columns
 cols : Char -> String -> List String
 cols delim row = map trim (split (==delim) row)
 
 -- | Convert a List to a Vect n iff the list has n elements
-lengthIs : (n : Nat) -> List a -> Maybe (Vect a n)
-lengthIs O     []        = Just []
-lengthIs O     (x :: xs) = Nothing
+lengthIs : (n : Nat) -> List a -> Maybe (Vect n a)
+lengthIs Z     []        = Just []
+lengthIs Z     (x :: xs) = Nothing
 lengthIs (S n) []        = Nothing
-lengthIs (S n) (x :: xs) = fmap (Vect.(::) x) (lengthIs n xs)
+lengthIs (S n) (x :: xs) = map (Vect.(::) x) (lengthIs n xs)
 
 -- | A representation of the "schema" of a CSV file.
 data CSVType : Type where
   MkCSVType : (delim : Char) ->
               (n : Nat) ->
-              (header : Vect String n) ->
+              (header : Vect n String) ->
               CSVType
 
 delim : CSVType -> Char
@@ -37,10 +37,10 @@ delim (MkCSVType d _ _) = d
 colCount : CSVType -> Nat
 colCount (MkCSVType _ n _) = n
 
-header : (t : CSVType) -> Vect String (colCount t)
+header : (t : CSVType) -> Vect (colCount t) String
 header (MkCSVType _ _ h) = h
 
-vectEq : Eq a => Vect a n -> Vect a n -> Bool
+vectEq : Eq a => Vect n a -> Vect n a -> Bool
 vectEq Nil Nil = True
 vectEq (x :: xs) (y :: ys) = x == y && vectEq xs ys
 
@@ -61,7 +61,7 @@ row_lemma (MkCSVType d n h) v = v
 
 -- Attempt to read a string as a row in some schema
 readRow : (t : CSVType) -> String -> Maybe (Row t)
-readRow t r = fmap (row_lemma t . applyNames (header t)) .
+readRow t r = map (row_lemma t . applyNames (header t)) .
               lengthIs (colCount t) .
               cols (delim t) $ r
 
