@@ -173,6 +173,11 @@ namespace Schemas
   instance Show Schema where
     show s = show (cast {to=List Attribute} s)
 
+  data SchemaEq : Schema -> Schema -> Type where
+    Done : SchemaEq [] []
+    Attr : AttrEq a1 a2 -> SchemaEq s1 s2 -> SchemaEq (a1 :: s1) (a2 :: s2)
+
+
   colNames : Schema -> List String
   colNames [] = []
   colNames (c ::: _ :: s) = c :: colNames s
@@ -386,13 +391,19 @@ namespace Expr
   compileExpr (Const BOOLEAN False) = "false"
 
 namespace Database
-  Database : Type
-  Database = List (String, Schema)
+  data Database : Type where
+    Nil : Database
+    (::) : (String, Schema) -> Database -> Database
 
   namespace HasTable
     data HasTable : Database -> String -> Schema -> Type where
-      Here : HasTable ((n,s)::db) n s
+      Here : so (n == n') -> HasTable ((n,s)::db) n' s
       There : HasTable db n s -> HasTable ((n',s')::db) n s
+
+    getSchema : String -> Database -> Maybe Schema
+    getSchema tbl [] = Nothing
+    getSchema tbl ((name, schema)::tables) = if tbl == name then Just schema else getSchema tbl tables
+
 
 namespace Automation
 
@@ -411,6 +422,10 @@ namespace Automation
   extractAttr : (TT, List TT) -> (TT, TT) -- Extract the components of attribute (c ::: t)
   extractAttr (P _ (NS (UN ":::") ["Schemas", "DB", "Providers"]) _, [col, ty]) = (col, ty)
   extractAttr (fn, args) = (P Ref (UN (show fn ++ "  " ++ show args)) Erased, Erased)
+
+  extractPair : (TT, List TT) -> (TT, TT) -- Extract from anything pairlike
+  extractPair (_, [a, b]) = (a, b)
+  extractPair (op, args) = (P Ref (UN (show op ++ "  " ++ show args)) Erased, Erased)
 
   typeHere : TTName
   typeHere = (NS "Here" ["Schemas", "DB", "Providers"])
@@ -504,20 +519,47 @@ namespace Automation
         Nothing => Refine ("Couldn't find proof for " ++ show h) -- easy ctxt (Bind n (Pi h) false)
   findNotOccurs ctxt goal = Refine ("Goal not a negation of occurs: " ++ show goal)-- easy ctxt goal
 
+  hasTableHere : TTName
+  hasTableHere = (NS "Here" ["HasTable", "Database", "DB", "Providers"])
+
+  hasTableThere : TTName
+  hasTableThere = (NS "There" ["HasTable", "Database", "DB", "Providers"])
+
+  findHasTableProof : TT -> TT
+  findHasTableProof goal =
+    case unApply goal of
+      (hasTable, [db, name, schema]) => hasTableProof (unApply db) name schema
+    where %assert_total hasTableProof : (TT, List TT) -> TT -> TT -> TT
+--          hasTableProof a b c = (P Ref (show a ++ "    --        " ++  show b) Erased)
+          hasTableProof (P _ (NS (UN "::") ["Database", "DB", "Providers"]) _, [hd, tl]) name schema =
+            let (name', schema') = extractPair (unApply hd) in
+            if name' == name
+              then mkApp (P Ref hasTableHere Erased) [name, name', schema, tl, P Ref (UN "oh") Erased]
+              else mkApp (P Ref hasTableThere Erased) [tl, name, schema, name', schema', tl, hasTableProof (unApply tl) name schema]
+          hasTableProof db name schema =  (P Ref ("Failed to construct proof that " ++ show name ++ " is a table in " ++ show db ++ " with schema " ++ show schema) Erased)
+
   findHasTable : Nat -> List (TTName, Binder TT) -> TT -> Tactic
-  findHasTable O ctxt goal = Refine (NS (UN "Here") ["HasTable"]) `Seq` Solve
-  findHasTable (S n) ctxt goal = Try (Refine (NS (UN "Here") ["HasTable"]) `Seq` Solve)
+--  findHasTable _ ctxt goal = Exact $ findHasTableProof goal
+
+  findHasTable O ctxt goal = seq [ Refine (NS (UN "Here") ["HasTable"]), Solve, Refine (UN "oh"), Solve]
+  findHasTable (S n) ctxt goal = Try (seq [ Refine (NS (UN "Here") ["HasTable"])
+                                          , Refine (UN "oh")
+                                          , Solve
+                                          ])
                                      (seq [ Refine (NS (UN "There") ["HasTable"])
                                           , Solve
-                                          , findHasTable n ctxt goal])
+                                          , findHasTable n ctxt goal
+                                          ])
+
 
 
 namespace Query
 
   data Query : Database -> Schema -> Type where
     T : (db : Database) -> (tbl : String) ->
-        {default tactics {applyTactic findHasTable 50; solve; }
-         ok : HasTable db tbl s} ->
+--        {default tactics {compute ; applyTactic findHasTable 50 ;  }
+--         ok : HasTable db tbl s} ->
+        {auto ok : getSchema tbl db = Just s} -> 
         Query db s
     Union : Query db s -> Query db s -> Query db s
     Product : Query db s1 -> Query db s2 ->

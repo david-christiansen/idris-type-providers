@@ -28,11 +28,16 @@ namespace TypeProvider
                                     return (the (List (String, String)) (x :: tbls))
                        Nothing => return List.Nil
 
+  toDB : List (String, Schema) -> Database
+  toDB [] = []
+  toDB ((n, s) :: ts) = (n, s) :: (toDB ts)
+
   getDB : String -> IO Database
   getDB file = do ptr <- mkForeign (FFun "sqlite3_open_file" [FString] FPtr) file
                   stmt <- mkForeign (FFun "query_get_tables" [FPtr] FPtr) ptr
                   tblInfo <- getTables stmt
-                  return (mapMaybe (getSchema . snd) tblInfo)
+                  let asList = mapMaybe (getSchema . snd) tblInfo
+                  return (toDB asList)
 
   loadSchema : String -> IO (Provider Database)
   loadSchema file = do db <- getDB file

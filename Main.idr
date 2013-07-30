@@ -9,8 +9,9 @@ import Providers.DBProvider
 %provide (testDB : Database) with loadSchema "test.sqlite"
 
 
+
 query : Query testDB ["name":::TEXT, "wheels":::NULLABLE INTEGER, "description":::TEXT]
-query = Project (Select (Product (T testDB "people")
+query = Project (Select (Product (T testDB  "people")
                                  (Rename (T testDB "transport") "id" "transport_id"))
                         (Col "id" INTEGER == Col "owner" INTEGER))
                 ["name":::TEXT, "wheels":::NULLABLE INTEGER, "description":::TEXT]
