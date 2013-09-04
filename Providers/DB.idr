@@ -1,5 +1,7 @@
 module Providers.DB
 
+import Providers
+
 import Data.BoundedList
 import Decidable.Equality
 import Language.Reflection
@@ -135,13 +137,13 @@ namespace Types
 
   (<==>) : (interpSql t1) -> (interpSql t2) -> Bool
   (<==>) {t1=t1}         {t2=t2}         a        b        with (decEq t1 t2, t1)
-  (<==>) {t1=INTEGER}    {t2=INTEGER}    a        b        | (Yes refl, INTEGER)    = a == b
-  (<==>) {t1=TEXT}       {t2=TEXT}       a        b        | (Yes refl, TEXT)       = a == b
-  (<==>) {t1=NULLABLE t} {t2=NULLABLE t} Nothing  Nothing  | (Yes refl, NULLABLE t) = True
-  (<==>) {t1=NULLABLE t} {t2=NULLABLE t} (Just a) (Just b) | (Yes refl, NULLABLE t) = a <==> b
-  (<==>) {t1=REAL}       {t2=REAL}       a        b        | (Yes refl, REAL)       = a == b
-  (<==>) {t1=BOOLEAN}    {t2=BOOLEAN}    a        b        | (Yes refl, BOOLEAN)    = a == b
-  (<==>) {t1=t1}         {t2=t2}         a        b        | (No no,    _)          = False
+    (<==>) {t1=INTEGER}    {t2=INTEGER}    a        b        | (Yes refl, INTEGER)    = a == b
+    (<==>) {t1=TEXT}       {t2=TEXT}       a        b        | (Yes refl, TEXT)       = a == b
+    (<==>) {t1=NULLABLE t} {t2=NULLABLE t} Nothing  Nothing  | (Yes refl, NULLABLE t) = True
+    (<==>) {t1=NULLABLE t} {t2=NULLABLE t} (Just a) (Just b) | (Yes refl, NULLABLE t) = a <==> b
+    (<==>) {t1=REAL}       {t2=REAL}       a        b        | (Yes refl, REAL)       = a == b
+    (<==>) {t1=BOOLEAN}    {t2=BOOLEAN}    a        b        | (Yes refl, BOOLEAN)    = a == b
+    (<==>) {t1=t1}         {t2=t2}         a        b        | (_,        _)          = False
 
 
 namespace Schemas
@@ -473,6 +475,7 @@ namespace Automation
   occursThere = (NS "There" ["Occurs", "Schemas", "DB", "Providers"])
 
   -- Construct a proof term witnessing that some key is found in a schema
+  partial
   findOccursProof : TT -> TT
   findOccursProof goal =
     case unApply goal of
@@ -485,10 +488,12 @@ namespace Automation
               else mkApp (P Ref occursThere Erased) [tl, c, col, t, occursProof (unApply tl) c]
           occursProof other c = (P Ref ("Failed to construct proof that " ++ show c ++ " is in " ++ show other) Erased)
 
+  partial
   findOccurs : List (TTName, Binder TT) -> TT -> Tactic
   findOccurs ctxt goal = Exact $ findOccursProof goal
 
   -- Given a premise that an item occurs in a context where it doesn't, give a proof that it doesn't
+  partial
   findNotOccursProof : TT -> Maybe TT
   findNotOccursProof h =
     case unApply h of
@@ -525,6 +530,7 @@ namespace Automation
   hasTableThere : TTName
   hasTableThere = (NS "There" ["HasTable", "Database", "DB", "Providers"])
 
+  partial
   findHasTableProof : TT -> TT
   findHasTableProof goal =
     case unApply goal of
@@ -538,8 +544,9 @@ namespace Automation
               else mkApp (P Ref hasTableThere Erased) [tl, name, schema, name', schema', tl, hasTableProof (unApply tl) name schema]
           hasTableProof db name schema =  (P Ref ("Failed to construct proof that " ++ show name ++ " is a table in " ++ show db ++ " with schema " ++ show schema) Erased)
 
+  partial
   findHasTable : Nat -> List (TTName, Binder TT) -> TT -> Tactic
---  findHasTable _ ctxt goal = Exact $ findHasTableProof goal
+  findHasTable _ ctxt goal = Exact $ findHasTableProof goal
 
   findHasTable O ctxt goal = seq [ Refine (NS (UN "Here") ["HasTable"]), Solve, Refine (UN "oh"), Solve]
   findHasTable (S n) ctxt goal = Try (seq [ Refine (NS (UN "Here") ["HasTable"])
@@ -559,7 +566,7 @@ namespace Query
     T : (db : Database) -> (tbl : String) ->
 --        {default tactics {compute ; applyTactic findHasTable 50 ;  }
 --         ok : HasTable db tbl s} ->
-        {auto ok : getSchema tbl db = Just s} -> 
+        {auto ok : getSchema tbl db = Just s} ->
         Query db s
     Union : Query db s -> Query db s -> Query db s
     Product : Query db s1 -> Query db s2 ->
