@@ -34,7 +34,7 @@ soNot : so p -> so (not p) -> _|_
 soNot oh oh impossible
 
 instance Cast Nat Int where
-  cast O = 0
+  cast Z = 0
   cast (S n) = 1 + (cast n)
 
 namespace Types
@@ -475,11 +475,11 @@ namespace Automation
   occursThere = (NS "There" ["Occurs", "Schemas", "DB", "Providers"])
 
   -- Construct a proof term witnessing that some key is found in a schema
-  partial
   findOccursProof : TT -> TT
   findOccursProof goal =
     case unApply goal of
       (occurs, [s, c]) => occursProof (unApply s) c
+      _ => (P Ref "Goal does not match for findOccursProof" Erased)
     where %assert_total occursProof : (TT, List TT) -> TT -> TT
           occursProof (P _ (NS (UN "::") ["Schemas", "DB", "Providers"]) _, [hd, tl]) c =
             let (col, t) = extractAttr (unApply hd) in
@@ -488,12 +488,10 @@ namespace Automation
               else mkApp (P Ref occursThere Erased) [tl, c, col, t, occursProof (unApply tl) c]
           occursProof other c = (P Ref ("Failed to construct proof that " ++ show c ++ " is in " ++ show other) Erased)
 
-  partial
   findOccurs : List (TTName, Binder TT) -> TT -> Tactic
   findOccurs ctxt goal = Exact $ findOccursProof goal
 
   -- Given a premise that an item occurs in a context where it doesn't, give a proof that it doesn't
-  partial
   findNotOccursProof : TT -> Maybe TT
   findNotOccursProof h =
     case unApply h of
@@ -548,7 +546,7 @@ namespace Automation
   findHasTable : Nat -> List (TTName, Binder TT) -> TT -> Tactic
   findHasTable _ ctxt goal = Exact $ findHasTableProof goal
 
-  findHasTable O ctxt goal = seq [ Refine (NS (UN "Here") ["HasTable"]), Solve, Refine (UN "oh"), Solve]
+  findHasTable Z ctxt goal = seq [ Refine (NS (UN "Here") ["HasTable"]), Solve, Refine (UN "oh"), Solve]
   findHasTable (S n) ctxt goal = Try (seq [ Refine (NS (UN "Here") ["HasTable"])
                                           , Refine (UN "oh")
                                           , Solve
