@@ -2,7 +2,6 @@ module Providers.DB
 
 import Providers
 
-import Data.BoundedList
 import Decidable.Equality
 import Language.Reflection
 import Language.Reflection.Utils
@@ -10,9 +9,6 @@ import SQLiteConstants
 import SQLiteTypes
 
 %default total
-
-varchar : (s : String) -> BoundedList Char n
-varchar {n=n} s = take n (unpack s)
 
 partial
 getProofYes : Dec p -> p
@@ -435,35 +431,35 @@ namespace Automation
   typeThere : TTName
   typeThere = (NS "There" ["Schemas", "DB", "Providers"])
 
+  hasTypeProof : TT -> TT -> TT -> TT
+  hasTypeProof (App (App (P _ (NS (UN "::") ["Schemas", "DB", "Providers"]) _) hd) tl) c t =
+    let attr = extractAttr (unApply hd) in
+    let c' = fst attr in
+    let t' = snd attr in
+    if (c == c' && t == t')
+      then mkApp (P Ref typeHere Erased) [c, c', t, tl, P Ref "oh" Erased]
+      else mkApp (P Ref typeThere Erased) [tl, c, t, c', t', hasTypeProof tl c t]
+  hasTypeProof fail c t = P Ref ("hasTypeProof failure for " ++ show c ++ " and " ++ show t) Erased
 
   findHasTypeProof : TT -> TT
   findHasTypeProof goal =
     case unApply goal of
-      (hasType, [s, c, t]) => hasTypeProof (unApply s) c t
+      (hasType, [s, c, t]) => hasTypeProof s c t
       _ => (P Ref "Wrong type" Erased)
-    where %assert_total hasTypeProof : (TT, List TT) -> TT -> TT -> TT
-          hasTypeProof (P _ (NS (UN "::") ["Schemas", "DB", "Providers"]) _, [hd, tl]) c t =
-            let (c', t') = extractAttr (unApply hd) in
-            if (c == c' && t == t')
-              then mkApp (P Ref typeHere Erased) [c, c', t, tl, P Ref "oh" Erased]
-              else mkApp (P Ref typeThere Erased) [tl, c, t, c', t', hasTypeProof (unApply tl) c t]
-          hasTypeProof fail c t = P Ref ("hasTypeProof failure for " ++ show c ++ " and " ++ show t) Erased
 
   findHasType : List (TTName, Binder TT) -> TT -> Tactic
   findHasType ctxt goal = Exact $ findHasTypeProof goal
 
 
-  %assert_total
   findSubSchemaProof : TT -> TT
-  findSubSchemaProof goal =
-    case unApply goal of
-      (P _ (MN _ "__Unit") _, []) => (P Ref (MN 0 "__II") Erased)
-      (n, [hasType, next]) => mkApp (P Ref "mkPair" Erased) [ hasType
-                                                            , next
-                                                            , findHasTypeProof hasType
-                                                            , findSubSchemaProof next
-                                                            ]
-      other => P Ref ("Fail " ++ show other) Erased
+  findSubSchemaProof (P _ (MN _ "__Unit") _)    = (P Ref (MN 0 "__II") Erased)
+  findSubSchemaProof (App (App n hasType) next) =
+    mkApp (P Ref "mkPair" Erased) [ hasType
+                                  , next
+                                  , findHasTypeProof hasType
+                                  , findSubSchemaProof next
+                                  ]
+  findSubSchemaProof other = P Ref ("Fail " ++ show other) Erased
 
   findSubSchema : List (TTName, Binder TT) -> TT -> Tactic
   findSubSchema ctxt goal = Exact $ findSubSchemaProof goal
@@ -474,19 +470,23 @@ namespace Automation
   occursThere : TTName
   occursThere = (NS "There" ["Occurs", "Schemas", "DB", "Providers"])
 
+  %assert_total
+  occursProof : (TT, List TT) -> TT -> TT
+  occursProof (P _ (NS (UN "::") ["Schemas", "DB", "Providers"]) _, [hd, tl]) c =
+   let attr = extractAttr (unApply hd) in
+   let col = fst attr in
+   let t = snd attr in
+     if col == c
+       then mkApp (P Ref occursHere Erased) [col, c, t, tl, P Ref (UN "oh") Erased]
+       else mkApp (P Ref occursThere Erased) [tl, c, col, t, occursProof (unApply tl) c]
+  occursProof other c = (P Ref ("Failed to construct proof that " ++ show c ++ " is in " ++ show other) Erased)
+
   -- Construct a proof term witnessing that some key is found in a schema
   findOccursProof : TT -> TT
   findOccursProof goal =
     case unApply goal of
       (occurs, [s, c]) => occursProof (unApply s) c
       _ => (P Ref "Goal does not match for findOccursProof" Erased)
-    where %assert_total occursProof : (TT, List TT) -> TT -> TT
-          occursProof (P _ (NS (UN "::") ["Schemas", "DB", "Providers"]) _, [hd, tl]) c =
-            let (col, t) = extractAttr (unApply hd) in
-            if col == c
-              then mkApp (P Ref occursHere Erased) [col, c, t, tl, P Ref (UN "oh") Erased]
-              else mkApp (P Ref occursThere Erased) [tl, c, col, t, occursProof (unApply tl) c]
-          occursProof other c = (P Ref ("Failed to construct proof that " ++ show c ++ " is in " ++ show other) Erased)
 
   findOccurs : List (TTName, Binder TT) -> TT -> Tactic
   findOccurs ctxt goal = Exact $ findOccursProof goal
