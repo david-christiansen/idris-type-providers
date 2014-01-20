@@ -73,7 +73,7 @@ nameCols schema = case dropPrefix (unpack "CREATE TABLE \"") (unpack schema) of
                                  in case dropPrefix ['"', ' ', '('] rest' of
                                       Just rest'' => case dropPrefix [')'] (reverse rest'') of
                                                        Just rest''' =>
-                                                         Just (pack name, split (==',') $ pack (reverse rest'''))
+                                                         Just (pack name, split (==',') (pack (reverse rest''')))
                                                        Nothing => Nothing
                                       Nothing => Nothing
 

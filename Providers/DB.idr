@@ -10,14 +10,6 @@ import SQLiteTypes
 
 %default total
 
-partial
-getProofYes : Dec p -> p
-getProofYes (Yes prf) = prf
-
-partial
-getProofNo : Dec p -> p -> _|_
-getProofNo (No prf) = prf
-
 isYes : Dec p -> Type
 isYes (Yes _) = ()
 isYes (No _) = _|_
@@ -29,9 +21,6 @@ isNo (No _)  = ()
 soNot : so p -> so (not p) -> _|_
 soNot oh oh impossible
 
-instance Cast Nat Int where
-  cast Z = 0
-  cast (S n) = 1 + (cast n)
 
 namespace Types
   data SQLType = INTEGER | TEXT | NULLABLE SQLType | REAL | BOOLEAN
@@ -185,7 +174,7 @@ namespace Schemas
     There : HasType s col t -> HasType (col' ::: t' :: s) col t
 
   nilSchemaEmpty : HasType [] c t -> _|_
-  nilSchemaEmpty Here impossible
+  nilSchemaEmpty (Here oh) impossible
   nilSchemaEmpty (There _) impossible
 
   hasTypeInv : so (not (col == c)) -> (HasType s col t -> _|_) -> HasType (c ::: t' :: s) col t -> _|_
@@ -210,7 +199,8 @@ namespace Schemas
                      Just (Ex_intro t prf) => Just (t ** There prf)
 
   -- Convenience function for eliminating type annotations on queries
-  partial lookup' : (s : Schema) -> (col : String) -> SQLType
+  %assert_total -- because of no decidable equality on String
+  lookup' : (s : Schema) -> (col : String) -> SQLType
   lookup' (c:::t :: s) c' = if c == c' then t else lookup' s c'
 
 
@@ -380,13 +370,13 @@ namespace Expr
   compileExpr (e1 == e2) = "(" ++ compileExpr e1 ++ ") = (" ++ compileExpr e2 ++ ")"
   compileExpr (NotNull e) = "(" ++ compileExpr e ++ ") is not null"
   compileExpr (Length e) = "length(" ++ compileExpr e ++ ")"
-  compileExpr (Const TEXT str) = "'" ++ str ++ "'" -- FIXME escape strings
-  compileExpr (Const INTEGER i) = show i
-  compileExpr (Const (NULLABLE t) Nothing) = "null"
-  compileExpr {s=s} (Const (NULLABLE t) (Just x)) = compileExpr {s=s} (Const t x)
-  compileExpr (Const REAL r) = show r
-  compileExpr (Const BOOLEAN True) = "true"
-  compileExpr (Const BOOLEAN False) = "false"
+  compileExpr (Const t v) = compileConst t v
+    where compileConst : (t : SQLType) -> (v : interpSql t) -> String
+          compileConst TEXT = \str : String => "'" ++ str ++ "'" -- FIXME escape strings
+          compileConst INTEGER = show
+          compileConst (NULLABLE t) = maybe "null" (compileConst t)
+          compileConst REAL = show
+          compileConst BOOLEAN = \b : Bool => boolElim b "true" "false"
 
 namespace Database
   data Database : Type where
@@ -528,21 +518,17 @@ namespace Automation
   hasTableThere : TTName
   hasTableThere = (NS "There" ["HasTable", "Database", "DB", "Providers"])
 
-  partial
   findHasTableProof : TT -> TT
-  findHasTableProof goal =
-    case unApply goal of
-      (hasTable, [db, name, schema]) => hasTableProof (unApply db) name schema
-    where %assert_total hasTableProof : (TT, List TT) -> TT -> TT -> TT
---          hasTableProof a b c = (P Ref (show a ++ "    --        " ++  show b) Erased)
-          hasTableProof (P _ (NS (UN "::") ["Database", "DB", "Providers"]) _, [hd, tl]) name schema =
+  findHasTableProof (App (App (App hasTable db) name) schema) = hasTableProof db name schema
+    where hasTableProof : TT -> TT -> TT -> TT
+          hasTableProof (App (App (P _ (NS (UN "::") ["Database", "DB", "Providers"]) _) hd) tl) name schema =
             let (name', schema') = extractPair (unApply hd) in
             if name' == name
               then mkApp (P Ref hasTableHere Erased) [name, name', schema, tl, P Ref (UN "oh") Erased]
-              else mkApp (P Ref hasTableThere Erased) [tl, name, schema, name', schema', tl, hasTableProof (unApply tl) name schema]
+              else mkApp (P Ref hasTableThere Erased) [tl, name, schema, name', schema', tl, hasTableProof tl name schema]
           hasTableProof db name schema =  (P Ref ("Failed to construct proof that " ++ show name ++ " is a table in " ++ show db ++ " with schema " ++ show schema) Erased)
+  findHasTableProof goal = P Ref ("Couldn't find HasTable proof for " ++ show goal) Erased
 
-  partial
   findHasTable : Nat -> List (TTName, Binder TT) -> TT -> Tactic
   findHasTable _ ctxt goal = Exact $ findHasTableProof goal
 
@@ -562,8 +548,6 @@ namespace Query
 
   data Query : Database -> Schema -> Type where
     T : (db : Database) -> (tbl : String) ->
---        {default tactics {compute ; applyTactic findHasTable 50 ;  }
---         ok : HasTable db tbl s} ->
         {auto ok : getSchema tbl db = Just s} ->
         Query db s
     Union : Query db s -> Query db s -> Query db s
@@ -596,21 +580,34 @@ namespace Query
           then ("\"" ++ from ++ "\" AS \"" ++ to ++ "\"") :: colNames s
           else col :: (compileRename' s)
 
+  quoteColName : String -> String
+  quoteColName c = "\"" ++ c ++ "\""
+
+  commasBetween : List String -> String
+  commasBetween ss = concat (intersperse ", " ss)
+
+  compileQuery : Query db s -> String
+  compileQuery (T db tbl) = tbl
+  compileQuery (Union t1 t2) = "(" ++ compileQuery t1 ++ ") UNION (" ++ compileQuery t2 ++ ")"
+  compileQuery (Product t1 t2) = "(" ++ compileQuery t1 ++ ") , (" ++ compileQuery t2 ++ ")"
+  compileQuery (Project t1 s') = Strings.(++) "SELECT "
+                                 (concat
+                                    (List.intersperse ", "
+                                      (map quoteColName (colNames s')))) `Strings.(++)`
+                                 " FROM (" ++ compileQuery t1 ++ ")"
+  compileQuery {s=s} (Select t e) = selectPart ++ fromPart ++ wherePart
+    where selectPart : String
+          selectPart = Strings.(++) "SELECT " (commasBetween (map {f=List} quoteColName (colNames s)))
+          fromPart : String
+          fromPart = " FROM (" ++ compileQuery t
+          wherePart : String
+          wherePart = ") WHERE " ++ compileExpr e
+  compileQuery (Rename t from to) = "SELECT " ++ (compileRename (getSchema t) from to) ++
+                                    " FROM (" ++ compileQuery t ++ ")"
+
+
   compile : Query db s -> String
-  compile te = "SELECT * FROM (" ++ compile' te ++ ")"
-    where compile' : Query db s -> String
-          compile' (T db tbl) = tbl
-          compile' (Union t1 t2) = "(" ++ compile' t1 ++ ") UNION (" ++ compile' t2 ++ ")"
-          compile' (Product t1 t2) = "(" ++ compile' t1 ++ ") , (" ++ compile' t2 ++ ")"
-          compile' (Project t1 s') = "SELECT " ++
-                                     (foldl (++) ""
-                                       (intersperse ", "
-                                         (map (\c => "\"" ++ c ++ "\"") (colNames s')))) ++
-                                     " FROM (" ++ compile' t1 ++ ")"
-          compile' {s=s} (Select t e) = "SELECT " ++ (foldl (++) "" (intersperse ", " (map (\c => "\"" ++ c ++ "\"") (colNames s)))) ++
-                                        " FROM (" ++ compile' t ++ ") WHERE " ++ compileExpr e
-          compile' (Rename t from to) = "SELECT " ++ (compileRename (getSchema t) from to) ++
-                                        " FROM (" ++ compile' t ++ ")"
+  compile te = "SELECT * FROM (" ++ compileQuery te ++ ")"
 
 
   partial  query : Query db s -> Table s
