@@ -1,5 +1,4 @@
 module Silly
-import Providers
 
 %language TypeProviders
 
