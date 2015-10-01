@@ -1,12 +1,11 @@
 module Silly
-import Providers
 
 %language TypeProviders
 
 charToInt : Char -> Maybe Int
-charToInt c = let i = cast {to=Int} c in
-              let zero = cast {to=Int} '0' in
-              let nine = cast {to=Int} '9' in
+charToInt c = let i = cast c in
+              let zero = cast '0' in
+              let nine = cast '9' in
               if i < zero || i > nine
                 then Nothing
                 else Just (i - zero)
@@ -17,9 +16,9 @@ parse' _   []      = Nothing
 parse' acc [d]     = Just (10 * acc + d)
 parse' acc (d::ds) = parse' (10 * acc + d) ds
 
-
-total parseInt : String -> Maybe Int
-parseInt str = (sequence (map charToInt (unpack str))) >>= parse' 0
+total
+parseInt : String -> Maybe Int
+parseInt str = traverse charToInt (unpack str) >>= parse' 0
 
 confirmAge : IO Bool
 confirmAge = do putStrLn "How old are you?"
@@ -28,12 +27,12 @@ confirmAge = do putStrLn "How old are you?"
                 case age of
                   Nothing => do putStrLn "Didn't understand"
                                 confirmAge
-                  Just x => return (if x >= 18 then True else False)
+                  Just x => pure (x >= 18)
 
 adultsOnly : IO (Provider Bool)
 adultsOnly = do oldEnough <- confirmAge
                 if oldEnough
-                  then do { putStrLn "ok" ; return (Provide True) }
+                  then putStrLn "ok" *> pure (Provide True)
                   else return (Error "Only adults may compile this program")
 
 %provide (ok : Bool) with adultsOnly
